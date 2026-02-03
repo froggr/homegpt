@@ -320,6 +320,7 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             println!("  /sessions         - List available sessions");
             println!("  /resume <id>      - Resume a specific session");
             println!("  /model [name]     - Show or switch model (e.g., /model gpt-4o)");
+            println!("  /models           - List available model prefixes");
             println!("  /compact          - Compact session history");
             println!("  /clear            - Clear session history (keeps context)");
             println!("  /memory <query>   - Search memory");
@@ -511,9 +512,17 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             let status = agent.session_status();
             println!("\nSession Status:");
             println!("  ID: {}", status.id);
+            println!("  Model: {}", agent.model());
             println!("  Messages: {}", status.message_count);
             println!("  Context tokens: ~{}", status.token_count);
             println!("  Compactions: {}", status.compaction_count);
+
+            println!("\nMemory:");
+            println!("  Chunks: {}", agent.memory_chunk_count());
+            if agent.has_embeddings() {
+                println!("  Embeddings: enabled");
+            }
+
             if status.api_input_tokens > 0 || status.api_output_tokens > 0 {
                 println!("\nAPI Usage:");
                 println!("  Input tokens: {}", status.api_input_tokens);
@@ -524,6 +533,18 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
                 );
             }
             println!();
+            CommandResult::Continue
+        }
+
+        "/models" => {
+            println!("\nAvailable model prefixes:");
+            println!("  claude-cli/*    - Use Claude CLI (e.g., claude-cli/opus, claude-cli/sonnet)");
+            println!("  gpt-*           - OpenAI (requires API key)");
+            println!("  claude-*        - Anthropic API (requires API key)");
+            println!("  ollama/*        - Ollama local (e.g., ollama/llama3)");
+            println!("  <other>         - Defaults to Ollama");
+            println!("\nCurrent model: {}", agent.model());
+            println!("Use /model <name> to switch.\n");
             CommandResult::Continue
         }
 

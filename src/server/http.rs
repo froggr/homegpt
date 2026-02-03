@@ -92,6 +92,7 @@ impl Server {
             .route("/api/ws", get(websocket_handler))
             .route("/api/memory/search", get(memory_search))
             .route("/api/memory/stats", get(memory_stats))
+            .route("/api/memory/reindex", post(memory_reindex))
             .route("/api/status", get(status))
             .layer(cors)
             .with_state(state);
@@ -539,6 +540,53 @@ fn memory_stats_inner(
         total_files: stats.total_files,
         total_chunks: stats.total_chunks,
         index_size_kb: stats.index_size_kb,
+    })
+}
+
+// Memory reindex endpoint
+#[derive(Deserialize)]
+struct ReindexRequest {
+    #[serde(default)]
+    force: bool,
+}
+
+#[derive(Serialize)]
+struct ReindexResponse {
+    files_processed: usize,
+    files_updated: usize,
+    chunks_indexed: usize,
+    duration_ms: u128,
+}
+
+async fn memory_reindex(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ReindexRequest>,
+) -> Response {
+    // Run reindex in blocking task since it uses sqlite
+    let config = state.config.memory.clone();
+    let force = request.force;
+
+    match tokio::task::spawn_blocking(move || memory_reindex_inner(&config, force)).await {
+        Ok(Ok(response)) => Json(response).into_response(),
+        Ok(Err(e)) => AppError(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => {
+            AppError(StatusCode::INTERNAL_SERVER_ERROR, format!("Task error: {}", e)).into_response()
+        }
+    }
+}
+
+fn memory_reindex_inner(
+    config: &crate::config::MemoryConfig,
+    force: bool,
+) -> Result<ReindexResponse, anyhow::Error> {
+    let memory = MemoryManager::new(config)?;
+    let stats = memory.reindex(force)?;
+
+    Ok(ReindexResponse {
+        files_processed: stats.files_processed,
+        files_updated: stats.files_updated,
+        chunks_indexed: stats.chunks_indexed,
+        duration_ms: stats.duration.as_millis(),
     })
 }
 
