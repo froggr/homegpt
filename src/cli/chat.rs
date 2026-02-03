@@ -191,6 +191,9 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
     let mut rl = DefaultEditor::new()?;
     let mut stdout = io::stdout();
 
+    // Track pending file attachments
+    let mut pending_attachments: Vec<(String, String)> = Vec::new(); // (filename, content)
+
     loop {
         let readline = rl.readline("You: ");
 
@@ -219,6 +222,59 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
 
         // Handle commands
         if input.starts_with('/') {
+            // Special handling for /attach - adds to pending attachments
+            if input.starts_with("/attach") {
+                let parts: Vec<&str> = input.split_whitespace().collect();
+                if parts.len() < 2 {
+                    eprintln!("Usage: /attach <file_path>");
+                    continue;
+                }
+                let file_path = parts[1..].join(" ");
+                let expanded = shellexpand::tilde(&file_path).to_string();
+
+                match std::fs::read_to_string(&expanded) {
+                    Ok(content) => {
+                        let filename = std::path::Path::new(&expanded)
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or(&file_path);
+                        pending_attachments.push((filename.to_string(), content));
+                        println!(
+                            "Attached: {} ({} bytes)",
+                            filename,
+                            pending_attachments.last().unwrap().1.len()
+                        );
+                        println!("Type your message to send with attachment(s), or /attachments to list.\n");
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to read file: {}", e);
+                    }
+                }
+                continue;
+            }
+
+            // /attachments - list pending attachments
+            if input == "/attachments" {
+                if pending_attachments.is_empty() {
+                    println!("\nNo pending attachments.\n");
+                } else {
+                    println!("\nPending attachments:");
+                    for (i, (name, content)) in pending_attachments.iter().enumerate() {
+                        println!("  {}. {} ({} bytes)", i + 1, name, content.len());
+                    }
+                    println!("\nType your message to send, or /clear-attachments to remove.\n");
+                }
+                continue;
+            }
+
+            // /clear-attachments - clear pending attachments
+            if input == "/clear-attachments" {
+                let count = pending_attachments.len();
+                pending_attachments.clear();
+                println!("\nCleared {} attachment(s).\n", count);
+                continue;
+            }
+
             match handle_command(input, &mut agent, &agent_id).await {
                 CommandResult::Continue => continue,
                 CommandResult::Quit => break,
@@ -229,11 +285,24 @@ pub async fn run(args: ChatArgs, agent_id: &str) -> Result<()> {
             }
         }
 
+        // Build message with attachments
+        let message = if pending_attachments.is_empty() {
+            input.to_string()
+        } else {
+            let mut msg = input.to_string();
+            msg.push_str("\n\n---\n\n**Attached files:**\n");
+            for (name, content) in &pending_attachments {
+                msg.push_str(&format!("\n### {}\n```\n{}\n```\n", name, content));
+            }
+            pending_attachments.clear();
+            msg
+        };
+
         // Send message to agent with streaming
         print!("\nLocalGPT: ");
         stdout.flush()?;
 
-        match agent.chat_stream(input).await {
+        match agent.chat_stream(&message).await {
             Ok(mut stream) => {
                 let mut full_response = String::new();
                 let mut pending_tool_calls = None;
@@ -327,6 +396,8 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             println!("  /models           - List available model prefixes");
             println!("  /context          - Show context window usage");
             println!("  /export [file]    - Export session as markdown");
+            println!("  /attach <file>    - Attach file to next message");
+            println!("  /attachments      - List pending attachments");
             println!("  /compact          - Compact session history");
             println!("  /clear            - Clear session history (keeps context)");
             println!("  /memory <query>   - Search memory");
