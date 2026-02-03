@@ -324,7 +324,7 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             println!("  /memory <query>   - Search memory");
             println!("  /reindex          - Rebuild memory index");
             println!("  /save             - Save current session");
-            println!("  /status           - Show session status");
+            println!("  /status           - Show session status and API token usage");
             println!();
             CommandResult::Continue
         }
