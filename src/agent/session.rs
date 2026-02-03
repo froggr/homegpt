@@ -80,6 +80,11 @@ impl Session {
         messages
     }
 
+    /// Get all messages in the session
+    pub fn messages(&self) -> &[Message] {
+        &self.messages
+    }
+
     /// Get only user and assistant messages (for session memory saving)
     pub fn user_assistant_messages(&self) -> Vec<Message> {
         self.messages

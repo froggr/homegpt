@@ -104,6 +104,46 @@ impl Agent {
         self.memory.has_embeddings()
     }
 
+    /// Get context window configuration
+    pub fn context_window(&self) -> usize {
+        self.config.context_window
+    }
+
+    /// Get reserve tokens configuration
+    pub fn reserve_tokens(&self) -> usize {
+        self.config.reserve_tokens
+    }
+
+    /// Get current context usage info
+    pub fn context_usage(&self) -> (usize, usize, usize) {
+        let used = self.session.token_count();
+        let available = self.config.context_window;
+        let reserve = self.config.reserve_tokens;
+        let usable = available.saturating_sub(reserve);
+        (used, usable, available)
+    }
+
+    /// Export session messages as markdown
+    pub fn export_markdown(&self) -> String {
+        let mut output = String::new();
+        output.push_str("# LocalGPT Session Export\n\n");
+        output.push_str(&format!("Model: {}\n", self.config.model));
+        output.push_str(&format!("Session ID: {}\n\n", self.session.id()));
+        output.push_str("---\n\n");
+
+        for msg in self.session.messages() {
+            let role = match msg.role {
+                Role::User => "**User**",
+                Role::Assistant => "**Assistant**",
+                Role::System => "**System**",
+                Role::Tool => "**Tool**",
+            };
+            output.push_str(&format!("{}\n\n{}\n\n---\n\n", role, msg.content));
+        }
+
+        output
+    }
+
     /// Get cumulative token usage for this session
     pub fn usage(&self) -> &Usage {
         &self.cumulative_usage

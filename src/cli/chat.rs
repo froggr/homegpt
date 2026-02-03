@@ -321,6 +321,8 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             println!("  /resume <id>      - Resume a specific session");
             println!("  /model [name]     - Show or switch model (e.g., /model gpt-4o)");
             println!("  /models           - List available model prefixes");
+            println!("  /context          - Show context window usage");
+            println!("  /export [file]    - Export session as markdown");
             println!("  /compact          - Compact session history");
             println!("  /clear            - Clear session history (keeps context)");
             println!("  /memory <query>   - Search memory");
@@ -548,6 +550,41 @@ async fn handle_command(input: &str, agent: &mut Agent, agent_id: &str) -> Comma
             println!("\nCurrent model: {}", agent.model());
             println!("Use /model <name> to switch.\n");
             CommandResult::Continue
+        }
+
+        "/context" => {
+            let (used, usable, total) = agent.context_usage();
+            let pct = (used as f64 / usable as f64 * 100.0).min(100.0);
+            println!("\nContext Window:");
+            println!("  Used: {} tokens ({:.1}%)", used, pct);
+            println!("  Usable: {} tokens", usable);
+            println!("  Total: {} tokens", total);
+            println!("  Reserve: {} tokens", total - usable);
+
+            if pct > 80.0 {
+                println!("\n⚠ Context nearly full. Consider /compact or /new.");
+            }
+            println!();
+            CommandResult::Continue
+        }
+
+        "/export" => {
+            let markdown = agent.export_markdown();
+            if parts.len() >= 2 {
+                let path = parts[1..].join(" ");
+                let expanded = shellexpand::tilde(&path).to_string();
+                match std::fs::write(&expanded, &markdown) {
+                    Ok(()) => {
+                        println!("\nSession exported to: {}\n", expanded);
+                        CommandResult::Continue
+                    }
+                    Err(e) => CommandResult::Error(format!("Failed to export: {}", e)),
+                }
+            } else {
+                // Print to stdout
+                println!("\n{}", markdown);
+                CommandResult::Continue
+            }
         }
 
         _ => CommandResult::Error(format!(
