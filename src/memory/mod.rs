@@ -1,8 +1,10 @@
+mod embeddings;
 mod index;
 mod search;
 mod watcher;
 mod workspace;
 
+pub use embeddings::{EmbeddingProvider, OpenAIEmbeddingProvider};
 pub use index::{MemoryIndex, ReindexStats};
 pub use search::MemoryChunk;
 pub use watcher::MemoryWatcher;

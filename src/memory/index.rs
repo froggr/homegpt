@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::debug;
 
+use super::embeddings::{cosine_similarity, deserialize_embedding, serialize_embedding};
 use super::search::MemoryChunk;
 
 #[derive(Clone)]
@@ -45,15 +46,20 @@ impl MemoryIndex {
                 size INTEGER NOT NULL
             );
 
-            -- Chunked content
+            -- Chunked content with embeddings
             CREATE TABLE IF NOT EXISTS chunks (
                 id INTEGER PRIMARY KEY,
                 file_path TEXT NOT NULL,
                 line_start INTEGER NOT NULL,
                 line_end INTEGER NOT NULL,
                 content TEXT NOT NULL,
+                embedding TEXT,
+                embedding_model TEXT,
                 FOREIGN KEY (file_path) REFERENCES files(path) ON DELETE CASCADE
             );
+
+            -- Index for finding chunks without embeddings
+            CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks(embedding_model);
 
             -- Full-text search index
             CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -77,6 +83,9 @@ impl MemoryIndex {
             END;
             "#,
         )?;
+
+        // Migration: add embedding columns if they don't exist
+        Self::migrate_add_embedding_columns(&conn)?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -237,6 +246,197 @@ impl MemoryIndex {
     /// Get the database path
     pub fn db_path(&self) -> &Path {
         &self.db_path
+    }
+
+    /// Migration: add embedding columns if they don't exist
+    fn migrate_add_embedding_columns(conn: &Connection) -> Result<()> {
+        // Check if embedding column exists
+        let has_embedding: bool = conn
+            .prepare("SELECT embedding FROM chunks LIMIT 1")
+            .is_ok();
+
+        if !has_embedding {
+            debug!("Migrating: adding embedding column to chunks");
+            conn.execute("ALTER TABLE chunks ADD COLUMN embedding TEXT", [])?;
+            conn.execute("ALTER TABLE chunks ADD COLUMN embedding_model TEXT", [])?;
+        }
+
+        Ok(())
+    }
+
+    /// Get chunks that need embeddings
+    pub fn chunks_without_embeddings(&self, limit: usize) -> Result<Vec<(i64, String)>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        let mut stmt = conn.prepare(
+            "SELECT id, content FROM chunks WHERE embedding IS NULL LIMIT ?1",
+        )?;
+
+        let rows = stmt.query_map(params![limit as i64], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row?);
+        }
+
+        Ok(results)
+    }
+
+    /// Store embedding for a chunk
+    pub fn store_embedding(&self, chunk_id: i64, embedding: &[f32], model: &str) -> Result<()> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        let embedding_json = serialize_embedding(embedding);
+
+        conn.execute(
+            "UPDATE chunks SET embedding = ?1, embedding_model = ?2 WHERE id = ?3",
+            params![&embedding_json, model, chunk_id],
+        )?;
+
+        Ok(())
+    }
+
+    /// Vector search using embeddings
+    pub fn search_vector(
+        &self,
+        query_embedding: &[f32],
+        model: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryChunk>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        // Get all chunks with embeddings for this model
+        let mut stmt = conn.prepare(
+            "SELECT id, file_path, line_start, line_end, content, embedding
+             FROM chunks
+             WHERE embedding IS NOT NULL AND embedding_model = ?1",
+        )?;
+
+        let rows = stmt.query_map(params![model], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, i32>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })?;
+
+        // Compute similarities and sort
+        let mut scored: Vec<(f32, MemoryChunk)> = Vec::new();
+
+        for row in rows {
+            let (_, file_path, line_start, line_end, content, embedding_json) = row?;
+            let embedding = deserialize_embedding(&embedding_json);
+
+            if embedding.len() == query_embedding.len() {
+                let similarity = cosine_similarity(query_embedding, &embedding);
+                scored.push((
+                    similarity,
+                    MemoryChunk {
+                        file: file_path,
+                        line_start,
+                        line_end,
+                        content,
+                        score: similarity as f64,
+                    },
+                ));
+            }
+        }
+
+        // Sort by similarity (descending)
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Take top results
+        Ok(scored.into_iter().take(limit).map(|(_, chunk)| chunk).collect())
+    }
+
+    /// Hybrid search: combine FTS and vector results
+    pub fn search_hybrid(
+        &self,
+        query: &str,
+        query_embedding: Option<&[f32]>,
+        model: &str,
+        limit: usize,
+        text_weight: f32,
+        vector_weight: f32,
+    ) -> Result<Vec<MemoryChunk>> {
+        // Get FTS results
+        let fts_results = self.search(query, limit * 2)?;
+
+        // Get vector results if embedding provided
+        let vector_results = if let Some(embedding) = query_embedding {
+            self.search_vector(embedding, model, limit * 2)?
+        } else {
+            Vec::new()
+        };
+
+        // Merge results using weighted scores
+        let mut merged: std::collections::HashMap<String, (f32, MemoryChunk)> =
+            std::collections::HashMap::new();
+
+        // Add FTS results (normalize BM25 score to 0-1 range)
+        let max_fts_score = fts_results
+            .iter()
+            .map(|r| r.score)
+            .fold(0.0f64, |a, b| a.max(b));
+        let max_fts_score = if max_fts_score > 0.0 { max_fts_score } else { 1.0 };
+
+        for result in fts_results {
+            let key = format!("{}:{}:{}", result.file, result.line_start, result.line_end);
+            let normalized_score = (result.score / max_fts_score) as f32;
+            let weighted_score = normalized_score * text_weight;
+            merged.insert(key, (weighted_score, result));
+        }
+
+        // Add/merge vector results
+        for result in vector_results {
+            let key = format!("{}:{}:{}", result.file, result.line_start, result.line_end);
+            let weighted_score = result.score as f32 * vector_weight;
+
+            if let Some((existing_score, existing_chunk)) = merged.get_mut(&key) {
+                *existing_score += weighted_score;
+                existing_chunk.score = *existing_score as f64;
+            } else {
+                let mut chunk = result;
+                chunk.score = weighted_score as f64;
+                merged.insert(key, (weighted_score, chunk));
+            }
+        }
+
+        // Sort by combined score and take top results
+        let mut results: Vec<_> = merged.into_values().collect();
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        Ok(results.into_iter().take(limit).map(|(_, chunk)| chunk).collect())
+    }
+
+    /// Count chunks with embeddings
+    pub fn embedded_chunk_count(&self, model: &str) -> Result<usize> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL AND embedding_model = ?1",
+            params![model],
+            |row| row.get(0),
+        )?;
+
+        Ok(count as usize)
     }
 }
 
