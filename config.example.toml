@@ -7,8 +7,8 @@
 # Format: "provider/model-id" (OpenClaw-compatible)
 #
 # Anthropic API (recommended, requires ANTHROPIC_API_KEY):
-#   - "anthropic/claude-sonnet-4-5" (recommended)
-#   - "anthropic/claude-opus-4-5"
+#   - "anthropic/claude-opus-4-5" (recommended)
+#   - "anthropic/claude-sonnet-4-5"
 #   - "anthropic/claude-3-5-haiku"
 #
 # Short aliases (auto-resolved):
@@ -26,7 +26,7 @@
 # Ollama (local):
 #   - "ollama/llama3", "ollama/mistral", etc.
 #
-default_model = "anthropic/claude-sonnet-4-5"
+default_model = "anthropic/claude-opus-4-5"
 
 # Context window size (in tokens)
 context_window = 128000

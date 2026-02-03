@@ -120,7 +120,7 @@ fn normalize_model_id(provider: &str, model_id: &str) -> String {
         "anthropic" => {
             match model_id.to_lowercase().as_str() {
                 // Claude 4.x models
-                "claude-opus-4-5" | "opus-4.5" | "opus" => "claude-sonnet-4-20250514".to_string(), // Opus 4.5 not yet available, use Sonnet 4
+                "claude-opus-4-5" | "opus-4.5" | "opus" => "claude-opus-4-5-20250514".to_string(),
                 "claude-sonnet-4-5" | "claude-sonnet-4" | "sonnet-4.5" | "sonnet-4" | "sonnet" => "claude-sonnet-4-20250514".to_string(),
                 // Claude 3.5 models
                 "claude-3-5-haiku" | "haiku-3.5" | "haiku" => "claude-3-5-haiku-20241022".to_string(),
