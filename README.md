@@ -1,6 +1,6 @@
 # LocalGPT
 
-A lightweight, local-only AI assistant with persistent memory and continuous operation capabilities.
+A Local focused AI assistant with persistent memory and continuous operation capabilities (or reshaped OpenClaw in Rust).
 
 ## Features
 

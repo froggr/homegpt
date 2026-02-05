@@ -76,9 +76,21 @@ workspace = "~/.localgpt/workspace"
 # - "none": FTS-only search, no vector embeddings
 embedding_provider = "local"
 
-# Embedding model (depends on provider):
-# - For "local": all-MiniLM-L6-v2 (default), bge-small-en-v1.5, bge-base-en-v1.5
-# - For "openai": text-embedding-3-small (default), text-embedding-3-large
+# Embedding model for local provider (FastEmbed):
+#
+# English:
+#   - all-MiniLM-L6-v2   (default, ~80MB, fastest)
+#   - bge-base-en-v1.5   (~430MB, higher quality)
+#
+# Chinese:
+#   - bge-small-zh-v1.5  (~95MB, Chinese-specific)
+#
+# Multilingual (Chinese, Japanese, Korean, 100+ languages):
+#   - multilingual-e5-small  (~470MB, compact)
+#   - multilingual-e5-base   (~1.1GB, recommended for Chinese)
+#   - bge-m3                 (~2.2GB, best quality)
+#
+# For OpenAI provider: text-embedding-3-small, text-embedding-3-large
 embedding_model = "all-MiniLM-L6-v2"
 
 # Chunk size for indexing (tokens)

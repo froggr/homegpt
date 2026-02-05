@@ -170,15 +170,43 @@ impl FastEmbedProvider {
     pub fn new(model_name: Option<&str>) -> Result<Self> {
         use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
 
-        // Default to all-MiniLM-L6-v2 (384 dims, fast, good quality)
+        // Supported models with disk sizes:
+        // - all-MiniLM-L6-v2:      384 dims, ~80 MB  (default, English, fastest)
+        // - bge-base-en-v1.5:      768 dims, ~430 MB (English, quality)
+        // - bge-small-zh-v1.5:     512 dims, ~95 MB  (Chinese only)
+        // - multilingual-e5-small: 384 dims, ~470 MB (multilingual, compact)
+        // - multilingual-e5-base:  768 dims, ~1.1 GB (multilingual, recommended for Chinese)
+        // - bge-m3:               1024 dims, ~2.2 GB (best multilingual quality)
         let (model_enum, name, dims) = match model_name {
+            // English models
             Some("all-MiniLM-L6-v2") | None => {
                 (EmbeddingModel::AllMiniLML6V2, "all-MiniLM-L6-v2", 384)
             }
-            Some("bge-small-en-v1.5") => (EmbeddingModel::BGESmallENV15, "bge-small-en-v1.5", 384),
             Some("bge-base-en-v1.5") => (EmbeddingModel::BGEBaseENV15, "bge-base-en-v1.5", 768),
+            // Chinese-specific model
+            Some("bge-small-zh-v1.5") => (EmbeddingModel::BGESmallZHV15, "bge-small-zh-v1.5", 512),
+            // Multilingual models (Chinese, Japanese, Korean, 100+ languages)
+            Some("multilingual-e5-small") => {
+                (EmbeddingModel::MultilingualE5Small, "multilingual-e5-small", 384)
+            }
+            Some("multilingual-e5-base") => {
+                (EmbeddingModel::MultilingualE5Base, "multilingual-e5-base", 768)
+            }
+            Some("bge-m3") => (EmbeddingModel::BGEM3, "bge-m3", 1024),
             Some(other) => {
-                anyhow::bail!("Unknown local model: {}. Supported: all-MiniLM-L6-v2, bge-small-en-v1.5, bge-base-en-v1.5", other);
+                anyhow::bail!(
+                    "Unknown embedding model: '{}'. Supported models:\n\
+                     English:\n\
+                       - all-MiniLM-L6-v2 (default, ~80MB)\n\
+                       - bge-base-en-v1.5 (~430MB)\n\
+                     Chinese:\n\
+                       - bge-small-zh-v1.5 (~95MB)\n\
+                     Multilingual:\n\
+                       - multilingual-e5-small (~470MB)\n\
+                       - multilingual-e5-base (~1.1GB, recommended for Chinese)\n\
+                       - bge-m3 (~2.2GB, best quality)",
+                    other
+                );
             }
         };
 

@@ -2,7 +2,7 @@
 name = "localgpt"
 version = "0.1.0"
 edition = "2021"
-description = "A lightweight, local focused AI assistant with persistent memory - stripped down OpenClaw in Rust"
+description = "A Local focused AI assistant with persistent memory and continuous operation capabilities (or reshaped OpenClaw in Rust)"
 license = "Apache-2.0"
 repository = "https://github.com/localgpt-app/localgpt"
 
