@@ -76,7 +76,8 @@ impl Server {
 
     pub async fn run(&self) -> Result<()> {
         // Create shared MemoryManager once to avoid reinitializing embedding provider
-        let memory = MemoryManager::new_with_full_config(&self.config.memory, Some(&self.config), "main")?;
+        let memory =
+            MemoryManager::new_with_full_config(&self.config.memory, Some(&self.config), "main")?;
 
         let state = Arc::new(AppState {
             config: self.config.clone(),
@@ -1170,7 +1171,9 @@ async fn get_daemon_logs(Query(query): Query<LogsQuery>) -> Response {
 
     // Use date-based log file (matches daemon.rs)
     let date = chrono::Local::now().format("%Y-%m-%d");
-    let log_path = state_dir.join("logs").join(format!("localgpt-{}.log", date));
+    let log_path = state_dir
+        .join("logs")
+        .join(format!("localgpt-{}.log", date));
 
     if !log_path.exists() {
         return Json(DaemonLogsResponse {

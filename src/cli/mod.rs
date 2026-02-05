@@ -2,6 +2,7 @@ pub mod ask;
 pub mod chat;
 pub mod config;
 pub mod daemon;
+pub mod desktop;
 pub mod memory;
 
 use clap::{Parser, Subcommand};
@@ -40,6 +41,9 @@ pub enum Commands {
 
     /// Ask a single question
     Ask(ask::AskArgs),
+
+    /// Launch the desktop GUI
+    Desktop(desktop::DesktopArgs),
 
     /// Manage the daemon
     Daemon(daemon::DaemonArgs),

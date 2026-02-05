@@ -4,9 +4,9 @@ mod search;
 mod watcher;
 mod workspace;
 
-pub use embeddings::{hash_text, EmbeddingProvider, FastEmbedProvider, OpenAIEmbeddingProvider};
 #[cfg(feature = "gguf")]
 pub use embeddings::LlamaCppProvider;
+pub use embeddings::{hash_text, EmbeddingProvider, FastEmbedProvider, OpenAIEmbeddingProvider};
 pub use index::{MemoryIndex, ReindexStats};
 pub use search::MemoryChunk;
 pub use watcher::MemoryWatcher;

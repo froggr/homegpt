@@ -203,12 +203,16 @@ impl FastEmbedProvider {
             // Chinese-specific model
             Some("bge-small-zh-v1.5") => (EmbeddingModel::BGESmallZHV15, "bge-small-zh-v1.5", 512),
             // Multilingual models (Chinese, Japanese, Korean, 100+ languages)
-            Some("multilingual-e5-small") => {
-                (EmbeddingModel::MultilingualE5Small, "multilingual-e5-small", 384)
-            }
-            Some("multilingual-e5-base") => {
-                (EmbeddingModel::MultilingualE5Base, "multilingual-e5-base", 768)
-            }
+            Some("multilingual-e5-small") => (
+                EmbeddingModel::MultilingualE5Small,
+                "multilingual-e5-small",
+                384,
+            ),
+            Some("multilingual-e5-base") => (
+                EmbeddingModel::MultilingualE5Base,
+                "multilingual-e5-base",
+                768,
+            ),
             Some("bge-m3") => (EmbeddingModel::BGEM3, "bge-m3", 1024),
             Some(other) => {
                 anyhow::bail!(
@@ -396,7 +400,6 @@ impl LlamaCppProvider {
             768
         }
     }
-
 }
 
 #[cfg(feature = "gguf")]
@@ -450,7 +453,11 @@ impl EmbeddingProvider for LlamaCppProvider {
             // Get embeddings from context
             let embeddings = ctx.embeddings_seq_ith(0)?;
 
-            debug!("Generated GGUF embedding with {} for text len {}", model_name, text.len());
+            debug!(
+                "Generated GGUF embedding with {} for text len {}",
+                model_name,
+                text.len()
+            );
 
             Ok(normalize_embedding(embeddings.to_vec()))
         })

@@ -457,7 +457,10 @@ fn prune_old_logs(logs_dir: &std::path::Path, keep_days: i64) {
 
             // Match localgpt-YYYY-MM-DD.log pattern
             if name_str.starts_with("localgpt-") && name_str.ends_with(".log") {
-                if let Some(date_part) = name_str.strip_prefix("localgpt-").and_then(|s| s.strip_suffix(".log")) {
+                if let Some(date_part) = name_str
+                    .strip_prefix("localgpt-")
+                    .and_then(|s| s.strip_suffix(".log"))
+                {
                     if date_part < cutoff_date.as_str() {
                         let _ = fs::remove_file(entry.path());
                     }

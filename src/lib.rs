@@ -5,9 +5,11 @@
 //! - Memory system with markdown files and SQLite index
 //! - Heartbeat runner for continuous operation
 //! - HTTP server for UI integration
+//! - Desktop GUI (egui-based)
 
 pub mod agent;
 pub mod config;
+pub mod desktop;
 pub mod heartbeat;
 pub mod memory;
 pub mod server;
