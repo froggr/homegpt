@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- HomeGPT Master Service
+         Starts all HomeGPT services on boot, including:
+         - HomeGPT daemon (port 31327)
+         - Voice services (TTS 8000, STT 8001, bridge 31341)
+         - Calendar bridge (31340), Discord bot (31342)
+         - SearXNG (8080)
+         - Homeschool app (port 443, HTTPS)
+
+         Install:
+           sudo cp scripts/com.homegpt.plist /Library/LaunchDaemons/
+           sudo launchctl load /Library/LaunchDaemons/com.homegpt.plist
+
+         Uninstall:
+           sudo launchctl unload /Library/LaunchDaemons/com.homegpt.plist
+           sudo rm /Library/LaunchDaemons/com.homegpt.plist
+
+         Manual control:
+           sudo launchctl start com.homegpt
+           sudo launchctl stop com.homegpt
+    -->
+
+    <key>Label</key>
+    <string>com.homegpt</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/frog/projects/homegpt/scripts/start-homegpt.sh</string>
+        <string>start</string>
+    </array>
+
+    <!-- Run as root (needed for port 443) -->
+    <key>UserName</key>
+    <string>root</string>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/frog</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/Users/frog/.cargo/bin</string>
+        <key>HOMESCHOOL_DIR</key>
+        <string>/Users/frog/projects/homeschool</string>
+        <!-- Add your Discord token here if using the bot -->
+        <!-- <key>DISCORD_BOT_TOKEN</key> -->
+        <!-- <string>your_token</string> -->
+        <!-- <key>DISCORD_GUILD_ID</key> -->
+        <!-- <string>your_guild_id</string> -->
+        <!-- <key>DISCORD_OWNER_IDS</key> -->
+        <!-- <string>id1,id2</string> -->
+    </dict>
+
+    <!-- Start on boot -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Keep alive — restart if it exits -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- Wait 30s after boot before starting (let LM Studio load first) -->
+    <key>StartInterval</key>
+    <integer>0</integer>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/frog/projects/homegpt</string>
+
+    <!-- Logs -->
+    <key>StandardOutPath</key>
+    <string>/Users/frog/.homegpt/logs/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/frog/.homegpt/logs/launchd-stderr.log</string>
+</dict>
+</plist>

@@ -20,7 +20,7 @@ HomeGPT is the brain behind our household. It connects to LM Studio (or Ollama) 
 Phone/Tablet/Laptop (any device on Tailnet)
     |
     v
-Homeschool App (:5173)          Discord
+Homeschool App (:443)           Discord
     |       |                      |
     v       v                      v
 LM Studio (:1234)          Discord Bot (:31342)
@@ -40,8 +40,11 @@ Everything runs on one machine (Mac Studio M4 Pro, 128GB). All data stays local.
 ## Quick Start
 
 ```bash
-# Build (headless, no GUI dependencies)
-cargo build --no-default-features --release
+# Build HomeGPT + install script dependencies
+./scripts/build.sh
+
+# Optional: install the binary to ~/.cargo/bin
+./scripts/build.sh install
 
 # Initialize config + workspace
 ./target/release/homegpt config init
@@ -49,11 +52,11 @@ cargo build --no-default-features --release
 # Edit config to point at your LLM
 vim ~/.homegpt/config.toml
 
-# Start the daemon (API + heartbeat + web UI)
-./target/release/homegpt daemon start
-
-# Or start everything (HomeGPT + voice + calendar + discord)
+# Start everything (HomeGPT + voice + calendar + discord + homeschool app)
 ./scripts/start-homegpt.sh
+
+# Or just the daemon (no sidecars)
+./target/release/homegpt daemon start
 ```
 
 ## Configuration
@@ -398,16 +401,22 @@ Inside `homegpt chat`:
 | 8000 | Pocket TTS | Text-to-speech |
 | 8001 | Whisper STT | Speech-to-text |
 | 1234 | LM Studio | LLM inference |
-| 5173 | Homeschool App | SvelteKit frontend |
+| 443 | Homeschool App | SvelteKit frontend (HTTPS via Tailscale) |
 
 ## Starting Everything
 
+The master script starts all services including the homeschool app:
+
 ```bash
-# Start all services at once
+# Start all services
 ./scripts/start-homegpt.sh
 
 # Check what's running
 ./scripts/start-homegpt.sh status
+
+# Tail a specific service log
+./scripts/start-homegpt.sh logs homegpt
+./scripts/start-homegpt.sh logs homeschool
 
 # Stop everything
 ./scripts/start-homegpt.sh stop
@@ -418,6 +427,34 @@ Or start just the core:
 ```bash
 # Just the daemon (API + heartbeat, no voice/discord/calendar)
 ./target/release/homegpt daemon start
+```
+
+### Start on Boot (macOS)
+
+```bash
+# Install the launchd service (runs as root for port 443)
+sudo cp scripts/com.homegpt.plist /Library/LaunchDaemons/
+sudo launchctl load /Library/LaunchDaemons/com.homegpt.plist
+
+# Control it
+sudo launchctl start com.homegpt
+sudo launchctl stop com.homegpt
+
+# Uninstall
+sudo launchctl unload /Library/LaunchDaemons/com.homegpt.plist
+sudo rm /Library/LaunchDaemons/com.homegpt.plist
+```
+
+Edit `scripts/com.homegpt.plist` to set your Discord token and other env vars before installing.
+
+### Environment Overrides
+
+The start script accepts these overrides:
+
+```bash
+HOMESCHOOL_DIR=~/projects/homeschool   # Path to homeschool app
+HOMEGPT_BIN=/path/to/homegpt           # Custom binary path
+SKIP_HOMESCHOOL=1                      # Don't start the web app
 ```
 
 ## Environment Variables
