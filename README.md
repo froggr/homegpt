@@ -18,7 +18,11 @@ A local device focused AI assistant built in Rust — persistent memory, autonom
 ## Install
 
 ```bash
+# Full install (includes desktop GUI)
 cargo install localgpt
+
+# Headless (no desktop GUI — for servers, Docker, CI)
+cargo install localgpt --no-default-features
 ```
 
 ## Quick Start

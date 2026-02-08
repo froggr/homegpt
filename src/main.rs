@@ -45,6 +45,7 @@ async fn async_main(cli: Cli) -> Result<()> {
     match cli.command {
         Commands::Chat(args) => cli::chat::run(args, &cli.agent).await,
         Commands::Ask(args) => cli::ask::run(args, &cli.agent).await,
+        #[cfg(feature = "desktop")]
         Commands::Desktop(args) => cli::desktop::run(args, &cli.agent),
         Commands::Daemon(args) => cli::daemon::run(args, &cli.agent).await,
         Commands::Memory(args) => cli::memory::run(args, &cli.agent).await,

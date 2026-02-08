@@ -2,6 +2,7 @@ pub mod ask;
 pub mod chat;
 pub mod config;
 pub mod daemon;
+#[cfg(feature = "desktop")]
 pub mod desktop;
 pub mod memory;
 
@@ -43,6 +44,7 @@ pub enum Commands {
     Ask(ask::AskArgs),
 
     /// Launch the desktop GUI
+    #[cfg(feature = "desktop")]
     Desktop(desktop::DesktopArgs),
 
     /// Manage the daemon
