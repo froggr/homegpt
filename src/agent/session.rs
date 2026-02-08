@@ -26,6 +26,9 @@ pub struct Session {
     cwd: String,
     messages: Vec<SessionMessage>,
     system_context: Option<String>,
+    /// Additional context injected per-request (e.g., tutor persona).
+    /// Appended to system_context when building messages for LLM.
+    additional_context: Option<String>,
     token_count: usize,
     compaction_count: u32,
     memory_flush_compaction_count: u32,
@@ -138,6 +141,7 @@ impl Session {
             cwd,
             messages: Vec::new(),
             system_context: None,
+            additional_context: None,
             token_count: 0,
             compaction_count: 0,
             memory_flush_compaction_count: 0,
@@ -167,6 +171,12 @@ impl Session {
     pub fn set_system_context(&mut self, context: String) {
         self.system_context = Some(context);
         self.recalculate_tokens();
+    }
+
+    /// Set additional context appended to system prompt (e.g., tutor persona).
+    /// Pass `None` to clear.
+    pub fn set_additional_context(&mut self, context: Option<String>) {
+        self.additional_context = context;
     }
 
     /// Add a message without metadata
@@ -200,9 +210,16 @@ impl Session {
         let mut messages = Vec::new();
 
         if let Some(ref context) = self.system_context {
+            let full_context = match &self.additional_context {
+                Some(extra) => format!(
+                    "{}\n\n---\n\n# Additional Context\n\n{}",
+                    context, extra
+                ),
+                None => context.clone(),
+            };
             messages.push(Message {
                 role: Role::System,
-                content: context.clone(),
+                content: full_context,
                 tool_calls: None,
                 tool_call_id: None,
                 images: Vec::new(),
@@ -433,6 +450,7 @@ impl Session {
             cwd: ".".to_string(),
             messages: Vec::new(),
             system_context: None,
+            additional_context: None,
             token_count: 0,
             compaction_count: 0,
             memory_flush_compaction_count: 0,

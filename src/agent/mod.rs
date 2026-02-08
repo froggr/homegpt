@@ -117,6 +117,13 @@ impl Agent {
         &self.app_config.tools.require_approval
     }
 
+    /// Set additional context that gets appended to the system prompt.
+    /// Used by HTTP API to inject per-request persona/role (e.g., tutor mode).
+    /// Pass `None` to clear.
+    pub fn set_additional_context(&mut self, context: Option<String>) {
+        self.session.set_additional_context(context);
+    }
+
     /// Switch to a different model
     pub fn set_model(&mut self, model: &str) -> Result<()> {
         let provider = providers::create_provider(model, &self.app_config)?;

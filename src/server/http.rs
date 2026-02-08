@@ -638,6 +638,9 @@ struct ChatRequest {
     session_id: Option<String>,
     /// Optional model to use for this request (switches session model)
     model: Option<String>,
+    /// Optional additional context to append to the system prompt for this session.
+    /// Used by frontends to inject persona/role instructions (e.g., tutor mode).
+    context: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -694,6 +697,11 @@ async fn chat(State(state): State<Arc<AppState>>, Json(request): Json<ChatReques
             return AppError(StatusCode::BAD_REQUEST, format!("Invalid model: {}", e))
                 .into_response();
         }
+    }
+
+    // Inject additional context into system prompt if provided
+    if let Some(ref context) = request.context {
+        entry.agent.set_additional_context(Some(context.clone()));
     }
 
     let result = entry.agent.chat(&request.message).await;
