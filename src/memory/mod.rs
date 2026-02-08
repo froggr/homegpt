@@ -1,6 +1,7 @@
 mod embeddings;
 mod index;
 mod search;
+pub mod verification;
 mod watcher;
 mod workspace;
 
@@ -9,6 +10,9 @@ pub use embeddings::LlamaCppProvider;
 pub use embeddings::{hash_text, EmbeddingProvider, FastEmbedProvider, OpenAIEmbeddingProvider};
 pub use index::{MemoryIndex, ReindexStats};
 pub use search::MemoryChunk;
+pub use verification::{
+    ChunkVerifier, Confidence, Provenance, VerifiedChunk, VerificationStats,
+};
 pub use watcher::MemoryWatcher;
 pub use workspace::{init_state_dir, init_workspace};
 
@@ -351,6 +355,65 @@ impl MemoryManager {
     /// Search memory using FTS only (faster, no API calls)
     pub fn search_fts(&self, query: &str, limit: usize) -> Result<Vec<MemoryChunk>> {
         self.index.search(query, limit)
+    }
+
+    /// Search memory and verify results with hash verification
+    pub fn search_verified(&self, query: &str, limit: usize) -> Result<Vec<VerifiedChunk>> {
+        let results = self.search(query, limit)?;
+        Ok(self.verify_results(&results))
+    }
+
+    /// Verify a list of search results against stored hashes
+    pub fn verify_results(&self, results: &[MemoryChunk]) -> Vec<VerifiedChunk> {
+        let verifier = self.index.verifier();
+
+        results
+            .iter()
+            .map(|chunk| {
+                if let Some(ref chunk_id) = chunk.chunk_id {
+                    let verified = verifier
+                        .verify_chunk(chunk_id, &chunk.file, &chunk.content)
+                        .unwrap_or(false);
+
+                    if let Ok(Some((hash, provenance, access_count, last_accessed))) =
+                        verifier.get_chunk_info(chunk_id)
+                    {
+                        let confidence = verifier.calculate_confidence(
+                            verified,
+                            &provenance,
+                            access_count,
+                            &last_accessed,
+                        );
+                        return VerifiedChunk {
+                            file: chunk.file.clone(),
+                            line_start: chunk.line_start,
+                            line_end: chunk.line_end,
+                            content: chunk.content.clone(),
+                            score: chunk.score,
+                            verified,
+                            hash_prefix: hash[..8.min(hash.len())].to_string(),
+                            hash,
+                            provenance,
+                            confidence,
+                        };
+                    }
+                }
+
+                // Fallback: no chunk_id or no hash info
+                VerifiedChunk {
+                    file: chunk.file.clone(),
+                    line_start: chunk.line_start,
+                    line_end: chunk.line_end,
+                    content: chunk.content.clone(),
+                    score: chunk.score,
+                    verified: false,
+                    hash_prefix: String::new(),
+                    hash: String::new(),
+                    provenance: Provenance::Unknown,
+                    confidence: Confidence::None,
+                }
+            })
+            .collect()
     }
 
     /// Get total chunk count

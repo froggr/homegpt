@@ -156,7 +156,7 @@ impl Agent {
     /// Export session messages as markdown
     pub fn export_markdown(&self) -> String {
         let mut output = String::new();
-        output.push_str("# LocalGPT Session Export\n\n");
+        output.push_str("# HomeGPT Session Export\n\n");
         output.push_str(&format!("Model: {}\n", self.config.model));
         output.push_str(&format!("Session ID: {}\n\n", self.session.id()));
         output.push_str("---\n\n");
@@ -1017,7 +1017,7 @@ impl Agent {
 }
 
 /// Welcome message shown on first run (brand new workspace)
-const FIRST_RUN_WELCOME: &str = r#"# Welcome to LocalGPT
+const FIRST_RUN_WELCOME: &str = r#"# Welcome to HomeGPT
 
 This is your first session. I've set up a fresh workspace for you.
 

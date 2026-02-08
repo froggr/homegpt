@@ -1,4 +1,4 @@
-//! HTTP server for LocalGPT
+//! HTTP server for HomeGPT
 //!
 //! Supports multiple sessions with session ID-based routing.
 //! Sessions are created on demand and cached for reuse.
@@ -1239,7 +1239,7 @@ async fn get_daemon_logs(Query(query): Query<LogsQuery>) -> Response {
     let date = chrono::Local::now().format("%Y-%m-%d");
     let log_path = state_dir
         .join("logs")
-        .join(format!("localgpt-{}.log", date));
+        .join(format!("homegpt-{}.log", date));
 
     if !log_path.exists() {
         return Json(DaemonLogsResponse {

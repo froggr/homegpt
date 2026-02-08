@@ -1,11 +1,11 @@
 
-# LocalGPT
+# HomeGPT
 
 A local device focused AI assistant built in Rust — persistent memory, autonomous tasks, ~27MB binary. Inspired by and compatible with OpenClaw.
 
-`cargo install localgpt`
+`cargo install homegpt`
 
-## Why LocalGPT?
+## Why HomeGPT?
 
 - **Single binary** — no Node.js, Docker, or Python required
 - **Local device focused** — runs entirely on your machine, your memory data stays yours
@@ -19,34 +19,34 @@ A local device focused AI assistant built in Rust — persistent memory, autonom
 
 ```bash
 # Full install (includes desktop GUI)
-cargo install localgpt
+cargo install homegpt
 
 # Headless (no desktop GUI — for servers, Docker, CI)
-cargo install localgpt --no-default-features
+cargo install homegpt --no-default-features
 ```
 
 ## Quick Start
 
 ```bash
 # Initialize configuration
-localgpt config init
+homegpt config init
 
 # Start interactive chat
-localgpt chat
+homegpt chat
 
 # Ask a single question
-localgpt ask "What is the meaning of life?"
+homegpt ask "What is the meaning of life?"
 
 # Run as a daemon with heartbeat, HTTP API and web ui
-localgpt daemon start
+homegpt daemon start
 ```
 
 ## How It Works
 
-LocalGPT uses plain markdown files as its memory:
+HomeGPT uses plain markdown files as its memory:
 
 ```
-~/.localgpt/workspace/
+~/.homegpt/workspace/
 ├── MEMORY.md            # Long-term knowledge (auto-loaded each session)
 ├── HEARTBEAT.md         # Autonomous task queue
 ├── SOUL.md              # Personality and behavioral guidance
@@ -60,7 +60,7 @@ Files are indexed with SQLite FTS5 for fast keyword search, and sqlite-vec for s
 
 ## Configuration
 
-Stored at `~/.localgpt/config.toml`:
+Stored at `~/.homegpt/config.toml`:
 
 ```toml
 [agent]
@@ -75,31 +75,31 @@ interval = "30m"
 active_hours = { start = "09:00", end = "22:00" }
 
 [memory]
-workspace = "~/.localgpt/workspace"
+workspace = "~/.homegpt/workspace"
 ```
 
 ## CLI Commands
 
 ```bash
 # Chat
-localgpt chat                     # Interactive chat
-localgpt chat --session <id>      # Resume session
-localgpt ask "question"           # Single question
+homegpt chat                     # Interactive chat
+homegpt chat --session <id>      # Resume session
+homegpt ask "question"           # Single question
 
 # Daemon
-localgpt daemon start             # Start background daemon
-localgpt daemon stop              # Stop daemon
-localgpt daemon status            # Show status
-localgpt daemon heartbeat         # Run one heartbeat cycle
+homegpt daemon start             # Start background daemon
+homegpt daemon stop              # Stop daemon
+homegpt daemon status            # Show status
+homegpt daemon heartbeat         # Run one heartbeat cycle
 
 # Memory
-localgpt memory search "query"    # Search memory
-localgpt memory reindex           # Reindex files
-localgpt memory stats             # Show statistics
+homegpt memory search "query"    # Search memory
+homegpt memory reindex           # Reindex files
+homegpt memory stats             # Show statistics
 
 # Config
-localgpt config init              # Create default config
-localgpt config show              # Show current config
+homegpt config init              # Create default config
+homegpt config show              # Show current config
 ```
 
 ## HTTP API
@@ -116,7 +116,7 @@ When the daemon is running:
 
 ## Blog
 
-[Why I Built LocalGPT in 4 Nights](https://localgpt.app/blog/why-i-built-localgpt-in-4-nights) — the full story with commit-by-commit breakdown.
+[Why I Built HomeGPT in 4 Nights](https://homegpt.local/blog/why-i-built-homegpt-in-4-nights) — the full story with commit-by-commit breakdown.
 
 ## Built With
 
@@ -124,13 +124,13 @@ Rust, Tokio, Axum, SQLite (FTS5 + sqlite-vec), fastembed, eframe
 
 ## Contributors
 
-<a href="https://github.com/localgpt-app/localgpt/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=localgpt-app/localgpt" />
+<a href="https://github.com/froggr/homegpt/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=froggr/homegpt" />
 </a>
 
 ## Stargazers
 
-[![Star History Chart](https://api.star-history.com/svg?repos=localgpt-app/localgpt&type=Date)](https://star-history.com/#localgpt-app/localgpt&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=froggr/homegpt&type=Date)](https://star-history.com/#froggr/homegpt&Date)
 
 ## License
 

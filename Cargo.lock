@@ -1918,6 +1918,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "homegpt"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "daemonize",
+ "directories",
+ "eframe",
+ "fastembed",
+ "fs2",
+ "futures",
+ "glob",
+ "json5",
+ "llama-cpp-2",
+ "mime_guess",
+ "mockall",
+ "notify",
+ "notify-debouncer-mini",
+ "once_cell",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "rust-embed",
+ "rustyline",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "shellexpand",
+ "sqlite-vec",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tiktoken-rs",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "http"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2574,54 +2622,6 @@ dependencies = [
  "find_cuda_helper",
  "glob",
  "walkdir",
-]
-
-[[package]]
-name = "localgpt"
-version = "0.1.2"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "chrono",
- "clap",
- "daemonize",
- "directories",
- "eframe",
- "fastembed",
- "fs2",
- "futures",
- "glob",
- "json5",
- "llama-cpp-2",
- "mime_guess",
- "mockall",
- "notify",
- "notify-debouncer-mini",
- "once_cell",
- "regex",
- "reqwest",
- "rusqlite",
- "rust-embed",
- "rustyline",
- "serde",
- "serde_json",
- "serde_yaml",
- "sha2",
- "shellexpand",
- "sqlite-vec",
- "tempfile",
- "thiserror 2.0.18",
- "tiktoken-rs",
- "tokio",
- "tokio-stream",
- "toml",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

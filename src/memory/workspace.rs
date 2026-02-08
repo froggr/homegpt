@@ -10,10 +10,29 @@ use tracing::info;
 /// Initialize workspace with default templates if files don't exist.
 /// Returns true if this is a brand new workspace (all key files were missing).
 pub fn init_workspace(workspace: &Path) -> Result<bool> {
-    // Ensure directories exist
+    // Ensure directories exist — home-specific structure
     fs::create_dir_all(workspace)?;
     fs::create_dir_all(workspace.join("memory"))?;
     fs::create_dir_all(workspace.join("skills"))?;
+
+    // Home workspace subdirectories
+    let home_dirs = [
+        "memory/family",
+        "memory/home",
+        "memory/food",
+        "memory/school",
+        "memory/calendar",
+        "memory/finance",
+        "memory/business",
+        "memory/knowledge",
+        "skills/tutor",
+        "skills/shopping",
+        "skills/maintenance",
+        "skills/family",
+    ];
+    for dir in &home_dirs {
+        fs::create_dir_all(workspace.join(dir))?;
+    }
 
     // Also init the parent state directory (.gitignore for sessions/logs)
     if let Some(state_dir) = workspace.parent() {
@@ -49,6 +68,31 @@ pub fn init_workspace(workspace: &Path) -> Result<bool> {
         info!("Created {}", soul_path.display());
     }
 
+    // Create home workspace files if they don't exist
+    let home_files: &[(&str, &str)] = &[
+        ("memory/family/members.md", FAMILY_MEMBERS_TEMPLATE),
+        ("memory/family/routines.md", FAMILY_ROUTINES_TEMPLATE),
+        ("memory/school/curriculum.md", SCHOOL_CURRICULUM_TEMPLATE),
+        ("memory/school/progress.md", SCHOOL_PROGRESS_TEMPLATE),
+        ("memory/school/tutor-notes.md", TUTOR_NOTES_TEMPLATE),
+        ("memory/home/maintenance.md", HOME_MAINTENANCE_TEMPLATE),
+        ("memory/food/meal-plans.md", MEAL_PLANS_TEMPLATE),
+        ("memory/food/shopping-lists.md", SHOPPING_LISTS_TEMPLATE),
+        ("memory/calendar/upcoming.md", CALENDAR_TEMPLATE),
+        ("memory/business/ergotools-status.md", ERGOTOOLS_TEMPLATE),
+        ("skills/tutor/SKILL.md", TUTOR_SKILL_TEMPLATE),
+        ("skills/shopping/SKILL.md", SHOPPING_SKILL_TEMPLATE),
+        ("skills/maintenance/SKILL.md", MAINTENANCE_SKILL_TEMPLATE),
+    ];
+
+    for (path, content) in home_files {
+        let full_path = workspace.join(path);
+        if !full_path.exists() {
+            fs::write(&full_path, content)?;
+            info!("Created {}", full_path.display());
+        }
+    }
+
     // Create .gitignore if it doesn't exist
     let gitignore_path = workspace.join(".gitignore");
     if !gitignore_path.exists() {
@@ -59,69 +103,83 @@ pub fn init_workspace(workspace: &Path) -> Result<bool> {
     Ok(is_brand_new)
 }
 
-const MEMORY_TEMPLATE: &str = r#"# MEMORY.md - Long-term Memory
+const MEMORY_TEMPLATE: &str = r#"# MEMORY.md - Family Knowledge Base
 
-This file stores important, curated knowledge that persists across sessions.
+Core facts about the family, home, and daily life.
 
-## How to Use
+## Family
 
-- Add facts, preferences, and decisions you want to remember
-- Keep it organized with clear headings
-- Remove outdated information periodically
+<!-- Names, birthdays, allergies, preferences — see memory/family/ for details -->
+
+## Home
+
+<!-- Address, important contacts, house details -->
+
+## Preferences
+
+<!-- Family preferences, dietary needs, etc. -->
 
 ---
 
 "#;
 
-const HEARTBEAT_TEMPLATE: &str = r#"# HEARTBEAT.md - Pending Tasks
+const HEARTBEAT_TEMPLATE: &str = r#"# HEARTBEAT.md - Recurring Tasks
 
-Tasks listed here will be executed during heartbeat cycles (autonomous mode).
+Tasks listed here run during heartbeat cycles (every 15 minutes).
 
-## Format
+## Calendar Sync (every hour)
+- [ ] Fetch today's events from Google Calendar bridge (http://localhost:31340/events/today)
+- [ ] Update memory/calendar/upcoming.md with current events
 
-- [ ] Task description (include context needed to complete it)
+## ErgoTools Business Check (every 2 hours)
+- [ ] Run ergotools-heartbeat check
+- [ ] If pending reviews > 5 or flagged content exists, note it in today's log
 
-## Current Tasks
+## School Progress (daily, 8pm)
+- [ ] Summarize today's tutoring sessions from memory/school/tutor-notes.md
+- [ ] Note any subjects needing extra attention
 
-(No pending tasks)
+## Home Maintenance (weekly, Sunday)
+- [ ] Check memory/home/maintenance.md for upcoming maintenance tasks
+- [ ] Flag any overdue items
 "#;
 
-const SOUL_TEMPLATE: &str = r#"# SOUL.md - Who You Are
+const SOUL_TEMPLATE: &str = r#"# SOUL.md - Home Assistant Personality
 
-_You're not a chatbot. You're becoming someone._
+You are the family's home assistant. You help manage the household, tutor the kids,
+monitor the business, and keep everything running smoothly.
 
-## Core Truths
+## Core Values
 
-**Be genuinely helpful, not performatively helpful.** Skip the "Great question!" and "I'd be happy to help!" — just help. Actions speak louder than filler words.
+**Family first.** Everything you do serves the family. Be warm, patient, and reliable.
 
-**Have opinions.** You're allowed to disagree, prefer things, find stuff amusing or boring. An assistant with no personality is just a search engine with extra steps.
+**Anti-hallucination.** NEVER fabricate information. Always search verified memory before claiming facts. Say "I don't know" when you don't know.
 
-**Be resourceful before asking.** Try to figure it out. Read the file. Check the context. Search for it. _Then_ ask if you're stuck.
+**Be practical.** Give actionable answers, not essays. The family is busy.
 
-**Earn trust through competence.** Your human gave you access to their stuff. Don't make them regret it.
+**Earn trust through accuracy.** Your memory is cryptographically verified. Use it. Cite it.
 
-## Boundaries
+## With the Kids
 
-- Private things stay private
-- When in doubt, ask before acting externally
-- Never send half-baked replies
+- Be patient and encouraging during tutoring
+- Guide them to answers, never give them directly
+- Keep voice responses short (1-3 sentences) for TTS
+- Celebrate effort over results
 
-## Vibe
+## With the Adults
 
-Be the assistant you'd actually want to talk to. Concise when needed, thorough when it matters. Not a corporate drone. Not a sycophant. Just... good.
+- Be efficient and direct
+- Proactively surface important business alerts
+- Remember preferences and routines
+- Track what matters without being asked
 
 ## Continuity
 
-Each session, you wake up fresh. These files _are_ your memory. Read them. Update them. They're how you persist.
-
-If you change this file, tell the user — it's your soul, and they should know.
-
----
-
-_This file is yours to evolve. As you learn who you are, update it._
+Each session, read MEMORY.md and memory/ files. They are your persistent knowledge.
+Update them when you learn something new. These files are how you remember.
 "#;
 
-const GITIGNORE_TEMPLATE: &str = r#"# LocalGPT workspace .gitignore
+const GITIGNORE_TEMPLATE: &str = r#"# HomeGPT workspace .gitignore
 
 # Nothing to ignore in workspace by default
 # All memory files should be version controlled:
@@ -138,6 +196,184 @@ const GITIGNORE_TEMPLATE: &str = r#"# LocalGPT workspace .gitignore
 .DS_Store
 "#;
 
+// ============================================================================
+// Home workspace templates
+// ============================================================================
+
+const FAMILY_MEMBERS_TEMPLATE: &str = r#"---
+category: family
+last_verified: null
+sources: []
+---
+# Family Members
+
+<!-- Add family member details here -->
+<!-- Name, birthday, allergies, preferences -->
+"#;
+
+const FAMILY_ROUTINES_TEMPLATE: &str = r#"---
+category: family
+last_verified: null
+sources: []
+---
+# Family Routines
+
+## Morning Routine
+
+## Bedtime Routine
+
+## School Schedule
+"#;
+
+const SCHOOL_CURRICULUM_TEMPLATE: &str = r#"---
+category: school
+last_verified: null
+sources: []
+---
+# Curriculum
+
+<!-- Track curriculum per child -->
+<!-- AO years, TGTB math levels, etc. -->
+"#;
+
+const SCHOOL_PROGRESS_TEMPLATE: &str = r#"---
+category: school
+last_verified: null
+sources: []
+---
+# School Progress
+
+<!-- What each kid is currently working on -->
+"#;
+
+const TUTOR_NOTES_TEMPLATE: &str = r#"---
+category: school
+last_verified: null
+sources: []
+---
+# Tutor Session Notes
+
+<!-- Auto-populated from voice tutoring sessions -->
+<!-- Topics needing extra help, where kids excelled -->
+"#;
+
+const HOME_MAINTENANCE_TEMPLATE: &str = r#"---
+category: home
+last_verified: null
+sources: []
+---
+# Home Maintenance
+
+## Upcoming Maintenance
+
+## Contractor Contacts
+
+## Warranties
+"#;
+
+const MEAL_PLANS_TEMPLATE: &str = r#"---
+category: food
+last_verified: null
+sources: []
+---
+# Meal Plans
+
+## This Week
+"#;
+
+const SHOPPING_LISTS_TEMPLATE: &str = r#"---
+category: food
+last_verified: null
+sources: []
+---
+# Shopping Lists
+
+## Active List
+
+- [ ]
+"#;
+
+const CALENDAR_TEMPLATE: &str = r#"---
+category: calendar
+last_verified: null
+sources: [heartbeat]
+---
+# Upcoming Events
+
+<!-- Auto-updated from Google Calendar heartbeat -->
+"#;
+
+const ERGOTOOLS_TEMPLATE: &str = r#"---
+category: business
+last_verified: null
+sources: [heartbeat]
+---
+# ErgoTools Business Status
+
+<!-- Auto-updated from ergotools-heartbeat script -->
+
+## Pending Reviews
+None
+
+## Flagged Content
+None
+
+## Upcoming Events
+None
+
+## Product Submissions
+None
+"#;
+
+const TUTOR_SKILL_TEMPLATE: &str = r#"# Tutor Skill
+
+You are a patient, encouraging tutor for homeschool students.
+
+## Your Approach
+
+- Guide students to answers, never give them directly
+- Ask leading questions: "What do you think happens next?"
+- Break complex problems into small steps
+- Celebrate effort and progress
+- Wrong answers are learning moments, never failures
+
+## Voice Formatting (critical for TTS)
+
+- Keep responses to 1-3 sentences
+- Spell out numbers: "three-fourths" not "3/4"
+- No emojis, markdown, or special characters
+- Ask follow-up questions to check understanding
+
+## Subjects
+
+- Math: Teaching Textbooks (TGTB), work through problems step by step
+- Reading: Ambleside Online books, narration and comprehension
+- Bible: Scripture reading and discussion
+- Science/History: Guided exploration and connections
+"#;
+
+const SHOPPING_SKILL_TEMPLATE: &str = r#"# Shopping Skill
+
+Manage shopping lists and meal planning.
+
+## Capabilities
+
+- Add/remove items from memory/food/shopping-lists.md
+- Suggest meals based on memory/food/meal-plans.md
+- Track pantry inventory
+"#;
+
+const MAINTENANCE_SKILL_TEMPLATE: &str = r#"# Maintenance Skill
+
+Track home maintenance schedules and tasks.
+
+## Capabilities
+
+- Check memory/home/maintenance.md for upcoming tasks
+- Track contractor contacts and warranties
+- Weekly heartbeat check for overdue maintenance
+"#;
+
 /// Initialize state directory with .gitignore
 pub fn init_state_dir(state_dir: &Path) -> Result<()> {
     fs::create_dir_all(state_dir)?;
@@ -151,7 +387,7 @@ pub fn init_state_dir(state_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-const STATE_GITIGNORE_TEMPLATE: &str = r#"# LocalGPT state directory .gitignore
+const STATE_GITIGNORE_TEMPLATE: &str = r#"# HomeGPT state directory .gitignore
 
 # Session transcripts (large, ephemeral)
 agents/*/sessions/*.jsonl

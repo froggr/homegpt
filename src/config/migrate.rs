@@ -1,6 +1,6 @@
 //! OpenClaw config migration support
 //!
-//! Provides best-effort migration from OpenClaw's JSON5 config format to LocalGPT's TOML format.
+//! Provides best-effort migration from OpenClaw's JSON5 config format to HomeGPT's TOML format.
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -106,7 +106,7 @@ pub fn try_migrate_openclaw_config() -> Option<Config> {
     Some(convert_openclaw_config(openclaw_config))
 }
 
-/// Convert OpenClaw config to LocalGPT config
+/// Convert OpenClaw config to HomeGPT config
 fn convert_openclaw_config(oc: OpenClawConfig) -> Config {
     let mut config = Config::default();
 
@@ -114,8 +114,8 @@ fn convert_openclaw_config(oc: OpenClawConfig) -> Config {
     if let Some(agents) = oc.agents {
         if let Some(defaults) = agents.defaults {
             if let Some(workspace) = defaults.workspace {
-                // Convert OpenClaw workspace path to LocalGPT format
-                let workspace = workspace.replace("~/.openclaw/", "~/.localgpt/");
+                // Convert OpenClaw workspace path to HomeGPT format
+                let workspace = workspace.replace("~/.openclaw/", "~/.homegpt/");
                 config.memory.workspace = workspace;
             }
 

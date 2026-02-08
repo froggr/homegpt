@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
-use localgpt::config::Config;
-use localgpt::memory::MemoryManager;
+use homegpt::config::Config;
+use homegpt::memory::MemoryManager;
 
 #[derive(Args)]
 pub struct MemoryArgs {

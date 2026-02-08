@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 /// A chunk of memory content returned from search
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryChunk {
+    /// Optional chunk ID for verification lookups
+    pub chunk_id: Option<String>,
+
     /// File path relative to workspace
     pub file: String,
 
@@ -25,6 +28,7 @@ impl MemoryChunk {
     /// Create a new memory chunk
     pub fn new(file: String, line_start: i32, line_end: i32, content: String, score: f64) -> Self {
         Self {
+            chunk_id: None,
             file,
             line_start,
             line_end,

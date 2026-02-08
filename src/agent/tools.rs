@@ -1,6 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::Utc;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -36,7 +38,7 @@ pub fn create_default_tools(
         Box::new(MemorySearchTool::new(workspace.clone()))
     };
 
-    Ok(vec![
+    let mut tools: Vec<Box<dyn Tool>> = vec![
         Box::new(BashTool::new(config.tools.bash_timeout_ms)),
         Box::new(ReadFileTool::new()),
         Box::new(WriteFileTool::new()),
@@ -44,7 +46,14 @@ pub fn create_default_tools(
         memory_search_tool,
         Box::new(MemoryGetTool::new(workspace)),
         Box::new(WebFetchTool::new(config.tools.web_fetch_max_bytes)),
-    ])
+    ];
+
+    // Add verified memory store tool if MemoryManager is available
+    if let Some(ref mem) = memory {
+        tools.push(Box::new(MemoryStoreVerifiedTool::new(Arc::clone(mem))));
+    }
+
+    Ok(tools)
 }
 
 // Bash Tool
@@ -522,26 +531,34 @@ impl Tool for MemorySearchToolWithIndex {
             search_type, query, limit
         );
 
-        let results = self.memory.search(query, limit)?;
+        let results = self.memory.search_verified(query, limit)?;
 
         if results.is_empty() {
-            return Ok("No results found".to_string());
+            return Ok("No results found in verified memory.".to_string());
         }
 
-        // Format results with relevance scores
+        // Format results with verification status and relevance scores
         let formatted: Vec<String> = results
             .iter()
             .enumerate()
             .map(|(i, chunk)| {
                 let preview: String = chunk.content.chars().take(200).collect();
                 let preview = preview.replace('\n', " ");
+                let tag = if chunk.verified {
+                    format!("[VERIFIED:{}]", chunk.hash_prefix)
+                } else {
+                    "[UNVERIFIED]".to_string()
+                };
                 format!(
-                    "{}. {} (lines {}-{}, score: {:.3})\n   {}{}",
+                    "{}. {} {} (lines {}-{}, score: {:.3})\n   Source: {} | Confidence: {}\n   {}{}",
                     i + 1,
+                    tag,
                     chunk.file,
                     chunk.line_start,
                     chunk.line_end,
                     chunk.score,
+                    chunk.provenance,
+                    chunk.confidence,
                     preview,
                     if chunk.content.len() > 200 { "..." } else { "" }
                 )
@@ -549,6 +566,97 @@ impl Tool for MemorySearchToolWithIndex {
             .collect();
 
         Ok(formatted.join("\n\n"))
+    }
+}
+
+// Memory Store Verified Tool - stores facts with YAML frontmatter for verification
+pub struct MemoryStoreVerifiedTool {
+    memory: Arc<MemoryManager>,
+}
+
+impl MemoryStoreVerifiedTool {
+    pub fn new(memory: Arc<MemoryManager>) -> Self {
+        Self { memory }
+    }
+}
+
+#[async_trait]
+impl Tool for MemoryStoreVerifiedTool {
+    fn name(&self) -> &str {
+        "memory_store"
+    }
+
+    fn schema(&self) -> ToolSchema {
+        ToolSchema {
+            name: "memory_store".to_string(),
+            description: "Store a verified fact in memory with provenance tracking. Facts are automatically indexed and hash-verified for anti-hallucination.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "fact": {
+                        "type": "string",
+                        "description": "The fact or information to store"
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Category for filing: family, home, food, school, calendar, finance, business, general (default: general)"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Source: user-stated, web-search, file-content, heartbeat (default: user-stated)"
+                    }
+                },
+                "required": ["fact"]
+            }),
+        }
+    }
+
+    async fn execute(&self, arguments: &str) -> Result<String> {
+        let args: Value = serde_json::from_str(arguments)?;
+        let fact = args["fact"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing fact"))?;
+        let category = args["category"].as_str().unwrap_or("general");
+        let source = args["source"].as_str().unwrap_or("user-stated");
+
+        let workspace = self.memory.workspace();
+        let facts_dir = workspace.join("memory").join("facts");
+        fs::create_dir_all(&facts_dir)?;
+
+        // Generate filename from timestamp
+        let now = Utc::now();
+        let filename = format!("{}.md", now.format("%Y%m%d-%H%M%S"));
+        let filepath = facts_dir.join(&filename);
+
+        // Compute content hash for reference
+        let mut hasher = Sha256::new();
+        hasher.update(fact.as_bytes());
+        let hash = format!("{:x}", hasher.finalize());
+        let hash_prefix = &hash[..8];
+
+        let confidence = if source == "user-stated" {
+            "high"
+        } else {
+            "medium"
+        };
+
+        // Write file with YAML frontmatter
+        let content = format!(
+            "---\nsource: {}\ncategory: {}\nconfidence: {}\ncreated: {}\n---\n\n{}\n",
+            source, category, confidence, now.to_rfc3339(), fact,
+        );
+
+        fs::write(&filepath, &content)?;
+
+        debug!(
+            "Stored verified fact [{}] in memory/facts/{}",
+            hash_prefix, filename
+        );
+
+        Ok(format!(
+            "Stored verified fact [{}] in memory/facts/{}\nCategory: {}, Source: {}, Confidence: {}",
+            hash_prefix, filename, category, source, confidence,
+        ))
     }
 }
 
@@ -706,7 +814,7 @@ impl Tool for WebFetchTool {
         let response = self
             .client
             .get(url)
-            .header("User-Agent", "LocalGPT/0.1")
+            .header("User-Agent", "HomeGPT/0.1")
             .send()
             .await?;
 
@@ -750,6 +858,16 @@ pub fn extract_tool_detail(tool_name: &str, arguments: &str) -> Option<String> {
             .get("query")
             .and_then(|v| v.as_str())
             .map(|s| format!("\"{}\"", s)),
+        "memory_store" => args
+            .get("fact")
+            .and_then(|v| v.as_str())
+            .map(|s| {
+                if s.len() > 60 {
+                    format!("\"{}...\"", &s[..57])
+                } else {
+                    format!("\"{}\"", s)
+                }
+            }),
         "web_fetch" => args
             .get("url")
             .and_then(|v| v.as_str())

@@ -1,12 +1,12 @@
-# LocalGPT Architecture
+# HomeGPT Architecture
 
 ## Relationship with OpenClaw
 
-LocalGPT is a **fresh Rust implementation** inspired by OpenClaw's architecture, stripped down to essential components for local-only AI interaction.
+HomeGPT is a **fresh Rust implementation** inspired by OpenClaw's architecture, stripped down to essential components for local-only AI interaction.
 
 ### Design Philosophy
 
-| Aspect | OpenClaw | LocalGPT |
+| Aspect | OpenClaw | HomeGPT |
 |--------|----------|----------|
 | Language | TypeScript | Rust |
 | LOC (estimated) | ~200k | ~3k |
@@ -44,10 +44,10 @@ The following concepts were directly inspired by OpenClaw:
 
 ### Key Differences
 
-1. **No Remote Channels**: LocalGPT is purely local - no Telegram, Discord, WhatsApp, etc.
-2. **No Plugin System**: OpenClaw has an extension architecture; LocalGPT is monolithic
-3. **No Gateway**: OpenClaw's gateway handles multi-channel routing; LocalGPT has only CLI and HTTP
-4. **No Canvas/UI**: OpenClaw has web-based chat UI; LocalGPT is CLI-first
+1. **No Remote Channels**: HomeGPT is purely local - no Telegram, Discord, WhatsApp, etc.
+2. **No Plugin System**: OpenClaw has an extension architecture; HomeGPT is monolithic
+3. **No Gateway**: OpenClaw's gateway handles multi-channel routing; HomeGPT has only CLI and HTTP
+4. **No Canvas/UI**: OpenClaw has web-based chat UI; HomeGPT is CLI-first
 
 ---
 
@@ -147,7 +147,7 @@ The following concepts were directly inspired by OpenClaw:
 ## File Structure Reference
 
 ```
-~/.localgpt/
+~/.homegpt/
 ├── config.toml              # Main configuration
 ├── workspace/
 │   ├── MEMORY.md            # Curated long-term knowledge
@@ -166,7 +166,7 @@ The following concepts were directly inspired by OpenClaw:
 
 ## Contributing
 
-When working on LocalGPT:
+When working on HomeGPT:
 
 1. Keep the codebase small and focused
 2. Prefer simplicity over features

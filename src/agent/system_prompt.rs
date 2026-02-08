@@ -1,4 +1,4 @@
-//! System prompt builder for LocalGPT agent
+//! System prompt builder for HomeGPT agent
 //!
 //! Builds the system prompt with identity, safety guardrails, workspace info,
 //! and special token handling (NO_REPLY, HEARTBEAT_OK).
@@ -15,7 +15,7 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
     let mut lines = Vec::new();
 
     // Identity
-    lines.push("You are a personal assistant running inside LocalGPT.".to_string());
+    lines.push("You are a personal assistant running inside HomeGPT.".to_string());
     lines.push(String::new());
 
     // Safety section (inspired by Anthropic's constitution)
@@ -122,25 +122,38 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
     );
     lines.push(String::new());
 
-    // Memory recall guidance
+    // Anti-hallucination memory recall guidance
     if params.tool_names.contains(&"memory_search") {
-        lines.push("## Memory Recall".to_string());
+        lines.push("## Verified Memory Recall".to_string());
         lines.push(
-            "Before answering questions about prior work, decisions, dates, people, preferences, \
-             or todos: run memory_search on MEMORY.md + memory/*.md first."
-                .to_string(),
+            "When recalling information:".to_string(),
         );
-        if params.tool_names.contains(&"memory_get") {
-            lines.push(
-                "Then use memory_get to pull only the needed lines and keep context small."
-                    .to_string(),
-            );
-        }
         lines.push(
-            "If low confidence after search, say you checked but found no relevant notes."
-                .to_string(),
+            "1. ALWAYS use memory_search before claiming stored facts".to_string(),
+        );
+        lines.push(
+            "2. Only cite information with [VERIFIED:hash] tags in search results".to_string(),
+        );
+        lines.push(
+            "3. If no results found: say \"I don't have that in my verified memory\"".to_string(),
+        );
+        lines.push(
+            "4. Never fabricate stored information — if unsure, search first".to_string(),
+        );
+        lines.push(
+            "5. State uncertainty clearly when confidence is low or medium".to_string(),
+        );
+        lines.push(
+            "6. Prefer [VERIFIED] results over unverified ones".to_string(),
         );
         lines.push(String::new());
+        if params.tool_names.contains(&"memory_get") {
+            lines.push(
+                "After memory_search, use memory_get to pull only the needed lines and keep context small."
+                    .to_string(),
+            );
+            lines.push(String::new());
+        }
     }
 
     // Silent replies section
@@ -165,7 +178,7 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
 
     // Heartbeat section (for autonomous task runner)
     lines.push("## Heartbeats".to_string());
-    lines.push("LocalGPT may send periodic heartbeat polls to check on pending tasks.".to_string());
+    lines.push("HomeGPT may send periodic heartbeat polls to check on pending tasks.".to_string());
     lines.push(
         "If you receive a heartbeat poll and there is nothing that needs attention, reply exactly:"
             .to_string(),
@@ -210,7 +223,7 @@ impl<'a> SystemPromptParams<'a> {
         let timezone = now.format("%Z").to_string();
 
         Self {
-            workspace_dir: workspace.to_str().unwrap_or("~/.localgpt/workspace"),
+            workspace_dir: workspace.to_str().unwrap_or("~/.homegpt/workspace"),
             model,
             tool_names: Vec::new(),
             hostname: std::env::var("HOSTNAME")
@@ -246,7 +259,8 @@ fn get_tool_summary(tool_name: &str) -> &'static str {
         "read_file" => "Read file contents",
         "write_file" => "Create or overwrite files",
         "edit_file" => "Make precise edits to files",
-        "memory_search" => "Semantically search MEMORY.md + memory/*.md",
+        "memory_search" => "Search verified memory with hash-based anti-hallucination",
+        "memory_store" => "Store a verified fact with provenance tracking",
         "memory_get" => "Fetch specific lines from memory files (use after memory_search)",
         "web_fetch" => "Fetch and extract content from a URL",
         _ => "Tool",

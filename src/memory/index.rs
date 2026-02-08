@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::embeddings::{cosine_similarity, deserialize_embedding, serialize_embedding};
 use super::search::MemoryChunk;
+use super::verification::{ChunkVerifier, Provenance};
 
 #[derive(Clone)]
 pub struct MemoryIndex {
@@ -22,6 +23,8 @@ pub struct MemoryIndex {
     chunk_size: usize,
     /// Token overlap between chunks (default: 80)
     chunk_overlap: usize,
+    /// Verification layer for anti-hallucination
+    verifier: ChunkVerifier,
 }
 
 #[derive(Debug)]
@@ -116,13 +119,17 @@ impl MemoryIndex {
             debug!("sqlite-vec extension not available, using in-memory vector search");
         }
 
+        let conn = Arc::new(Mutex::new(conn));
+        let verifier = ChunkVerifier::new(conn.clone())?;
+
         Ok(Self {
-            conn: Arc::new(Mutex::new(conn)),
+            conn,
             workspace: workspace.to_path_buf(),
             db_path: db_path.to_path_buf(),
             has_vec_extension,
             chunk_size: 400,
             chunk_overlap: 80,
+            verifier,
         })
     }
 
@@ -202,13 +209,13 @@ impl MemoryIndex {
             .to_string_lossy()
             .to_string();
 
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
-
-        // Check if file has changed
+        // Check if file has changed (separate lock scope to avoid deadlock with verifier)
         if !force {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+
             let existing: Option<String> = conn
                 .query_row(
                     "SELECT hash FROM files WHERE path = ?1",
@@ -225,43 +232,76 @@ impl MemoryIndex {
 
         debug!("Indexing file: {}", relative_path);
 
+        // Remove old verification hashes (verifier handles its own locking)
+        if let Err(e) = self.verifier.remove_hashes_for_path(&relative_path) {
+            warn!("Failed to remove old verification hashes: {}", e);
+        }
+
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs() as i64;
 
-        // Update file record (OpenClaw-compatible columns)
-        conn.execute(
-            "INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?1, 'memory', ?2, ?3, ?4)",
-            params![&relative_path, &file_hash, mtime, size],
-        )?;
-
-        // Delete existing chunks and their FTS entries
-        Self::delete_chunks_for_path(&conn, &relative_path)?;
-
-        // Create new chunks (OpenClaw-compatible)
         let chunks = chunk_text(&content, self.chunk_size, self.chunk_overlap);
+        let mut chunk_records: Vec<(String, String)> = Vec::new();
 
-        for chunk in chunks.iter() {
-            let chunk_id = Uuid::new_v4().to_string();
-            let chunk_hash = hash_content(&chunk.content);
+        // Insert file record and chunks (lock scope)
+        {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
+            // Update file record (OpenClaw-compatible columns)
             conn.execute(
-                r#"INSERT INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
-                   VALUES (?1, ?2, 'memory', ?3, ?4, ?5, '', ?6, '', ?7)"#,
-                params![&chunk_id, &relative_path, chunk.line_start, chunk.line_end, &chunk_hash, &chunk.content, now],
+                "INSERT OR REPLACE INTO files (path, source, hash, mtime, size) VALUES (?1, 'memory', ?2, ?3, ?4)",
+                params![&relative_path, &file_hash, mtime, size],
             )?;
 
-            // Insert into FTS
-            Self::insert_fts(
-                &conn,
-                &chunk_id,
-                &relative_path,
-                "memory",
-                "",
-                chunk.line_start,
-                chunk.line_end,
-                &chunk.content,
-            )?;
+            // Delete existing chunks and their FTS entries
+            Self::delete_chunks_for_path(&conn, &relative_path)?;
+
+            // Create new chunks (OpenClaw-compatible)
+            for chunk in chunks.iter() {
+                let chunk_id = Uuid::new_v4().to_string();
+                let chunk_hash = hash_content(&chunk.content);
+
+                conn.execute(
+                    r#"INSERT INTO chunks (id, path, source, start_line, end_line, hash, model, text, embedding, updated_at)
+                       VALUES (?1, ?2, 'memory', ?3, ?4, ?5, '', ?6, '', ?7)"#,
+                    params![&chunk_id, &relative_path, chunk.line_start, chunk.line_end, &chunk_hash, &chunk.content, now],
+                )?;
+
+                // Insert into FTS
+                Self::insert_fts(
+                    &conn,
+                    &chunk_id,
+                    &relative_path,
+                    "memory",
+                    "",
+                    chunk.line_start,
+                    chunk.line_end,
+                    &chunk.content,
+                )?;
+
+                chunk_records.push((chunk_id, chunk.content.clone()));
+            }
+        }
+        // conn lock dropped here
+
+        // Record verification hashes for new chunks (verifier handles its own locking)
+        let provenance = Provenance::FileContent {
+            path: relative_path.clone(),
+        };
+        for (chunk_id, chunk_content) in &chunk_records {
+            if let Err(e) =
+                self.verifier
+                    .record_hash(chunk_id, &relative_path, chunk_content, &provenance)
+            {
+                warn!(
+                    "Failed to record verification hash for chunk {}: {}",
+                    chunk_id, e
+                );
+            }
         }
 
         Ok(true)
@@ -287,13 +327,20 @@ impl MemoryIndex {
 
     /// Remove a file and its chunks from the index (for deleted files)
     pub fn remove_file(&self, relative_path: &str) -> Result<()> {
-        let conn = self
-            .conn
-            .lock()
-            .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
+        {
+            let conn = self
+                .conn
+                .lock()
+                .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
-        Self::delete_chunks_for_path(&conn, relative_path)?;
-        conn.execute("DELETE FROM files WHERE path = ?1", params![relative_path])?;
+            Self::delete_chunks_for_path(&conn, relative_path)?;
+            conn.execute("DELETE FROM files WHERE path = ?1", params![relative_path])?;
+        }
+
+        // Remove verification hashes (verifier handles its own locking)
+        if let Err(e) = self.verifier.remove_hashes_for_path(relative_path) {
+            warn!("Failed to remove verification hashes: {}", e);
+        }
 
         debug!("Removed deleted file from index: {}", relative_path);
         Ok(())
@@ -347,10 +394,9 @@ impl MemoryIndex {
             .lock()
             .map_err(|e| anyhow!("Lock poisoned: {}", e))?;
 
-        // OpenClaw-compatible: use 'path', 'start_line', 'end_line', 'text' columns
         let mut stmt = conn.prepare(
             r#"
-            SELECT fts.path, fts.start_line, fts.end_line, fts.text, bm25(chunks_fts) as score
+            SELECT fts.id, fts.path, fts.start_line, fts.end_line, fts.text, bm25(chunks_fts) as score
             FROM chunks_fts fts
             WHERE chunks_fts MATCH ?1
             ORDER BY score
@@ -360,11 +406,12 @@ impl MemoryIndex {
 
         let rows = stmt.query_map(params![&fts_query, limit as i64], |row| {
             Ok(MemoryChunk {
-                file: row.get(0)?,
-                line_start: row.get(1)?,
-                line_end: row.get(2)?,
-                content: row.get(3)?,
-                score: row.get::<_, f64>(4)?.abs(), // BM25 returns negative scores
+                chunk_id: Some(row.get(0)?),
+                file: row.get(1)?,
+                line_start: row.get(2)?,
+                line_end: row.get(3)?,
+                content: row.get(4)?,
+                score: row.get::<_, f64>(5)?.abs(), // BM25 returns negative scores
             })
         })?;
 
@@ -420,7 +467,12 @@ impl MemoryIndex {
         &self.db_path
     }
 
-    /// Check if we need to migrate from old LocalGPT schema to OpenClaw schema
+    /// Get the chunk verifier for hash verification
+    pub fn verifier(&self) -> &ChunkVerifier {
+        &self.verifier
+    }
+
+    /// Check if we need to migrate from old HomeGPT schema to OpenClaw schema
     fn needs_schema_migration(conn: &Connection) -> Result<bool> {
         // Check for old schema indicators:
         // 1. chunks table has 'file_path' column instead of 'path'
@@ -442,7 +494,7 @@ impl MemoryIndex {
         Ok(has_file_path || has_content)
     }
 
-    /// Migrate from old LocalGPT schema to OpenClaw-compatible schema
+    /// Migrate from old HomeGPT schema to OpenClaw-compatible schema
     fn migrate_to_openclaw_schema(conn: &Connection) -> Result<()> {
         // Start transaction
         conn.execute("BEGIN TRANSACTION", [])?;
@@ -767,7 +819,7 @@ impl MemoryIndex {
         // sqlite-vec uses vec_distance_cosine for cosine distance (1 - similarity)
         let mut stmt = conn.prepare(
             r#"
-            SELECT c.path, c.start_line, c.end_line, c.text,
+            SELECT c.id, c.path, c.start_line, c.end_line, c.text,
                    1.0 - vec_distance_cosine(v.embedding, ?1) AS score
             FROM chunks_vec v
             JOIN chunks c ON c.id = v.id
@@ -779,11 +831,12 @@ impl MemoryIndex {
 
         let rows = stmt.query_map(params![&query_blob, model, limit as i64], |row| {
             Ok(MemoryChunk {
-                file: row.get(0)?,
-                line_start: row.get(1)?,
-                line_end: row.get(2)?,
-                content: row.get(3)?,
-                score: row.get(4)?,
+                chunk_id: Some(row.get(0)?),
+                file: row.get(1)?,
+                line_start: row.get(2)?,
+                line_end: row.get(3)?,
+                content: row.get(4)?,
+                score: row.get(5)?,
             })
         })?;
 
@@ -823,7 +876,7 @@ impl MemoryIndex {
         let mut scored: Vec<(f32, MemoryChunk)> = Vec::new();
 
         for row in rows {
-            let (_, path, start_line, end_line, text, embedding_json) = row?;
+            let (id, path, start_line, end_line, text, embedding_json) = row?;
             let embedding = deserialize_embedding(&embedding_json);
 
             if embedding.len() == query_embedding.len() {
@@ -831,6 +884,7 @@ impl MemoryIndex {
                 scored.push((
                     similarity,
                     MemoryChunk {
+                        chunk_id: Some(id),
                         file: path,
                         line_start: start_line,
                         line_end: end_line,
